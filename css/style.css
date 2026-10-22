@@ -244,6 +244,36 @@ input[type=checkbox] { accent-color: var(--accent); width: 18px; height: 18px; }
 .match-list .when { color: var(--muted); }
 .match-list .var { color: var(--accent); font-weight: 700; }
 
+/* ------------------------------------------------ online */
+.text-input {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 10px; font: inherit; min-width: 0;
+}
+.text-input.code { width: 110px; text-transform: uppercase; letter-spacing: .15em; font-weight: 700; }
+.online-box {
+  max-width: 880px; margin: 0 auto 28px; padding: 18px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(240, 184, 74, .14), rgba(67, 134, 230, .12)), var(--bg-2);
+  border: 1px solid rgba(240, 184, 74, .45); display: grid; gap: 12px;
+}
+.online-box h2 { margin: 0 0 4px; font-size: 1.2rem; }
+.online-box p { margin: 0; color: var(--muted); }
+.online-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.online-actions #online-name { flex: 1 1 160px; }
+.or { color: var(--muted); }
+.local-title { max-width: 880px; margin: 0 auto 12px; font-size: 1.2rem; }
+.lobby { max-width: 640px; margin: 0 auto; display: grid; gap: 14px; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+.lobby h1 { margin: 0; font-size: 1.6rem; }
+.lobby h3 { margin: 6px 0 0; color: var(--muted); font-size: .95rem; }
+.room-code { color: var(--accent); letter-spacing: .15em; }
+.link-row { display: flex; gap: 8px; }
+.link-row input { flex: 1; }
+.seat-n { width: 28px; color: var(--muted); font-weight: 700; }
+.lobby-form { display: grid; gap: 10px; }
+.lobby-form > label { display: grid; gap: 4px; color: var(--muted); font-size: .9rem; }
+.muted { color: var(--muted); }
+.tabs { margin-top: 16px; }
+#link-name { width: 100%; }
+
 /* ------------------------------------------------ modal / toast */
 .modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(8, 6, 12, .7); backdrop-filter: blur(4px); }
 .modal-card { width: min(100%, 460px); background: var(--bg-2); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); animation: pop .18s ease-out; }

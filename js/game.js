@@ -1,5 +1,5 @@
 // Tela de configuração e controle da partida (jogadores locais e computador).
-import { createState, legalMoves, makeMove, resign, isInCheck, findKing, PIECE_TYPES } from './engine.js';
+import { createState, legalMoves, makeMove, resign, isInCheck, findKing, sameMove, PIECE_TYPES } from './engine.js';
 import { VARIANTS } from './variants.js';
 import { chooseMove } from './ai.js';
 import { Board2D, pieceHTML } from './render2d.js';
@@ -75,13 +75,21 @@ export function initSetup() {
 
 // ---------------------------------------------------------------- partida
 
-export function startGame(config) {
+// net: conexão da sala online (ou null para jogo local). moves: lances já jogados,
+// usados para reconstruir a partida de quem entra ou reconecta no meio do jogo.
+// Tipos de assento: human (joga neste aparelho), remote (outro aparelho), bot, empty.
+export function startGame(config, net = null, moves = []) {
   stopGame();
   const v = VARIANTS[config.variant];
   const setup = v.build({ teams: config.teams, newPieces: config.newPieces });
   const active = config.seats.map(s => s.type !== 'empty');
   const state = createState(setup, active);
-  ctx = { config, variantName: v.name + (config.variant === 'four' && config.teams ? ' (equipes)' : ''), state, history: [], selected: null, rot: 0, recorded: false, renderer: null };
+  ctx = {
+    config, net, state, history: [], moves: [], selected: null, rot: 0, recorded: false, renderer: null,
+    variantName: v.name + (config.variant === 'four' && config.teams ? ' (equipes)' : ''),
+  };
+  for (const ser of moves) applySer(ser);
+  ctx.recorded = ctx.state.status === 'over';
   location.hash = '#partida';
   setMode(config.mode || '2d');
   maybeBot();
@@ -95,6 +103,26 @@ export function stopGame() {
 }
 
 export function hasGame() { return !!ctx; }
+
+export function currentGame() {
+  return ctx ? { gameId: ctx.config.gameId, moves: ctx.moves.slice(), state: ctx.state, config: ctx.config } : null;
+}
+
+// Lance vindo de outro jogador da sala.
+export function receiveMove({ gameId, seq, move }) {
+  if (!ctx || !ctx.net || ctx.config.gameId !== gameId) return;
+  if (seq < ctx.moves.length) return;
+  if (seq > ctx.moves.length) { ctx.net.requestSync(); return; }
+  if (!commit(move, false)) ctx.net.requestSync();
+}
+
+// Troca o tipo de um assento (ex.: jogador desconectado passa para o computador).
+export function setSeatType(gameId, p, type) {
+  if (!ctx || ctx.config.gameId !== gameId || !ctx.config.seats[p]) return;
+  ctx.config.seats[p] = { ...ctx.config.seats[p], type };
+  refresh();
+  maybeBot();
+}
 
 async function setMode(mode) {
   const host = $('#board-host');
@@ -123,6 +151,7 @@ async function setMode(mode) {
 }
 
 const seatOf = p => ctx.config.seats[p];
+const runsBots = () => !ctx.net || ctx.net.isHost;
 const isHumanTurn = () => ctx.state.status === 'playing' && seatOf(ctx.state.turn).type === 'human';
 
 function viewPlayer() {
@@ -158,9 +187,11 @@ function renderSide() {
     banner.innerHTML = s.result.type === 'draw' ? 'Empate!' : `🏆 ${s.result.winners.map(w => escapeHTML(seatOf(w).name)).join(' e ')} venceu!`;
   } else {
     const p = s.players[s.turn];
-    banner.innerHTML = `<span class="dot" style="--pc:${p.color};--st:${p.stroke}"></span> Vez de <strong>${escapeHTML(seatOf(s.turn).name)}</strong>${seatOf(s.turn).type === 'bot' ? ' <em>(pensando…)</em>' : ''}`;
+    const seat = seatOf(s.turn);
+    const note = seat.type === 'bot' ? ' <em>(pensando…)</em>' : seat.type === 'remote' ? ' <em>(aguardando…)</em>' : ctx.net ? ' <em>— sua vez!</em>' : '';
+    banner.innerHTML = `<span class="dot" style="--pc:${p.color};--st:${p.stroke}"></span> Vez de <strong>${escapeHTML(seat.name)}</strong>${note}`;
   }
-  $('#variant-label').textContent = ctx.variantName;
+  $('#variant-label').textContent = ctx.variantName + (ctx.net ? ` · Sala ${ctx.net.code}` : '');
 
   $('#player-list').innerHTML = s.participants.map(p => {
     const pl = s.players[p];
@@ -171,7 +202,7 @@ function renderSide() {
     const team = s.teams ? `<span class="st team">Equipe ${p % 2 ? 'B' : 'A'}</span>` : '';
     return `<li class="${s.turn === p && s.status === 'playing' ? 'active' : ''} ${s.alive[p] ? '' : 'dead'}">
       <span class="dot" style="--pc:${pl.color};--st:${pl.stroke}"></span>
-      <span class="pname">${escapeHTML(seat.name)}${seat.type === 'bot' ? ' 🤖' : ''}</span>${team}${status}</li>`;
+      <span class="pname">${escapeHTML(seat.name)}${seat.type === 'bot' ? ' 🤖' : ''}${seat.type === 'remote' ? ' 🌐' : ''}${ctx.net && seat.type === 'human' ? ' (você)' : ''}</span>${team}${status}</li>`;
   }).join('');
 
   const log = $('#move-log');
@@ -183,8 +214,9 @@ function renderSide() {
   }).join('');
   log.scrollTop = log.scrollHeight;
 
-  $('#btn-undo').disabled = !ctx.history.length || s.status === 'over';
+  $('#btn-undo').disabled = !!ctx.net || !ctx.history.length || s.status === 'over';
   $('#btn-resign').disabled = !isHumanTurn();
+  $('#btn-new').textContent = ctx.net ? 'Sair da sala' : 'Novo jogo';
 }
 
 function onSquare(r, c) {
@@ -214,11 +246,36 @@ function askPromotion(options) {
   }));
 }
 
+const serialize = m => ({ fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo || null });
+
 function play(move) {
+  commit(serialize(move), true);
+}
+
+// Aplica um lance serializado ({fr, fc, tr, tc, promo} ou {resign: true}) ao estado.
+function applySer(ser) {
+  let next;
+  if (ser.resign) {
+    if (ctx.state.status !== 'playing') return false;
+    next = resign(ctx.state);
+  } else {
+    const m = legalMoves(ctx.state).find(x => sameMove(x, ser));
+    if (!m) return false;
+    next = makeMove(ctx.state, m);
+  }
   ctx.history.push(ctx.state);
-  ctx.state = makeMove(ctx.state, move);
+  ctx.state = next;
+  ctx.moves.push(ser);
+  return true;
+}
+
+function commit(ser, broadcast) {
+  const seq = ctx.moves.length;
+  if (!applySer(ser)) return false;
   ctx.selected = null;
+  if (broadcast && ctx.net) ctx.net.send('move', { gameId: ctx.config.gameId, seq, move: ser });
   afterMove();
+  return true;
 }
 
 function afterMove() {
@@ -229,25 +286,32 @@ function afterMove() {
 
 function maybeBot() {
   const s = ctx.state;
-  if (s.status !== 'playing' || seatOf(s.turn).type !== 'bot') return;
+  if (s.status !== 'playing' || seatOf(s.turn).type !== 'bot' || !runsBots()) return;
   const game = ctx;
+  clearTimeout(ctx.botTimer);
   ctx.botTimer = setTimeout(() => {
-    if (ctx !== game) return;
+    if (ctx !== game || seatOf(ctx.state.turn).type !== 'bot') return;
     const m = chooseMove(ctx.state);
-    if (!m) return;
-    ctx.history.push(ctx.state);
-    ctx.state = makeMove(ctx.state, m);
-    afterMove();
+    if (m) commit(serialize(m), true);
   }, 450);
 }
 
-function gameOver() {
+async function gameOver() {
+  const game = ctx;
   const s = ctx.state;
   let deltas = [];
+  let note = '';
   if (!ctx.recorded) {
     ctx.recorded = true;
     const entries = s.participants.map(p => ({ name: seatOf(p).name, bot: seatOf(p).type === 'bot', rank: s.result.rank[p] }));
-    if (entries.some(e => !e.bot)) deltas = recordMatch(ctx.variantName, entries);
+    if (!runsBots()) {
+      note = 'O anfitrião da sala registra o resultado no ranking.';
+    } else if (entries.some(e => !e.bot)) {
+      const res = await recordMatch(ctx.variantName, entries);
+      deltas = res.deltas;
+      note = res.global ? 'Resultado registrado no ranking global.' : 'Resultado salvo no ranking deste navegador.';
+    }
+    if (ctx !== game) return;
   }
   const rows = s.participants
     .map((p, i) => ({ p, rank: s.result.rank[p], d: deltas[i] }))
@@ -263,8 +327,9 @@ function gameOver() {
       <h2>${s.result.type === 'draw' ? 'Empate!' : 'Fim de jogo!'}</h2>
       <p>${escapeHTML(s.result.reason)}</p>
       <ol class="final">${rows}</ol>
+      ${note ? `<p class="muted">${note}</p>` : ''}
       <div class="actions">
-        <button class="btn" data-a="again">Jogar de novo</button>
+        ${ctx.net ? '<button class="btn" data-a="lobby">Voltar à sala</button>' : '<button class="btn" data-a="again">Jogar de novo</button>'}
         <button class="btn ghost" data-a="rank">Ver ranking</button>
         <button class="btn ghost" data-a="close">Fechar</button>
       </div>`);
@@ -273,6 +338,7 @@ function gameOver() {
       if (!a) return;
       closeModal();
       if (a === 'again') startGame(ctx.config);
+      if (a === 'lobby') location.hash = '#sala';
       if (a === 'rank') location.hash = '#ranking';
     });
   }, 500);
@@ -286,9 +352,9 @@ export function initGameControls() {
     refresh();
   });
   $('#btn-undo').addEventListener('click', () => {
-    if (!ctx || !ctx.history.length) return;
+    if (!ctx || ctx.net || !ctx.history.length) return;
     clearTimeout(ctx.botTimer);
-    do { ctx.state = ctx.history.pop(); } while (ctx.history.length && seatOf(ctx.state.turn).type !== 'human');
+    do { ctx.state = ctx.history.pop(); ctx.moves.pop(); } while (ctx.history.length && seatOf(ctx.state.turn).type !== 'human');
     ctx.selected = null;
     refresh();
     maybeBot();
@@ -296,10 +362,7 @@ export function initGameControls() {
   $('#btn-resign').addEventListener('click', () => {
     if (!ctx || !isHumanTurn()) return;
     if (!confirm(`${seatOf(ctx.state.turn).name}, deseja mesmo desistir?`)) return;
-    ctx.history.push(ctx.state);
-    ctx.state = resign(ctx.state);
-    ctx.selected = null;
-    afterMove();
+    commit({ resign: true }, true);
   });
   $('#btn-new').addEventListener('click', () => { location.hash = '#jogar'; });
   $$('#opt-autorotate, #opt-hints').forEach(el => el.addEventListener('change', refresh));

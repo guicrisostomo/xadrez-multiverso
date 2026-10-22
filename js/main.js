@@ -1,26 +1,64 @@
 // Navegação entre as telas (rotas por hash) e inicialização.
-import { initSetup, initGameControls, hasGame, stopGame } from './game.js';
+import { initSetup, initGameControls, hasGame } from './game.js';
 import { initTutorial, initPieces, maybeOfferTutorial } from './tutorial.js';
-import { loadRanking, resetRanking } from './ranking.js';
+import { loadRanking, loadGlobalRanking, resetRanking } from './ranking.js';
+import { initOnline, inRoom, joinFromLink, leaveEverything, lobbyChanged } from './online.js';
+import { supabaseEnabled } from './supabase.js';
 import { $, $$, escapeHTML, closeModal } from './ui.js';
 
-const ROUTES = { jogar: 'view-play', partida: 'view-game', tutorial: 'view-tutorial', pecas: 'view-pieces', ranking: 'view-ranking' };
+const ROUTES = { jogar: 'view-play', partida: 'view-game', sala: 'view-lobby', tutorial: 'view-tutorial', pecas: 'view-pieces', ranking: 'view-ranking' };
 
 function route() {
   let name = location.hash.slice(1) || 'jogar';
-  if (name === 'partida' && !hasGame()) name = 'jogar';
-  if (!ROUTES[name]) name = 'jogar';
-  if (name !== 'partida' && hasGame() && name === 'jogar') stopGame();
   closeModal();
-  $$('.view').forEach(v => { v.hidden = v.id !== ROUTES[name]; });
-  $$('.nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === `#${name === 'partida' ? 'jogar' : name}`));
+  const link = name.match(/^sala=([A-Za-z0-9]{5})$/);
+  if (link) { showView('view-play'); joinFromLink(link[1].toUpperCase()); return; }
+  if (name === 'partida' && !hasGame()) name = 'jogar';
+  if (name === 'sala' && !inRoom()) name = 'jogar';
+  if (!ROUTES[name]) name = 'jogar';
+  if (name === 'jogar') leaveEverything();
+  if (name === 'sala') lobbyChanged();
+  showView(ROUTES[name], name === 'partida' || name === 'sala' ? 'jogar' : name);
   if (name === 'ranking') renderRanking();
   window.scrollTo(0, 0);
 }
 
-function renderRanking() {
-  const data = loadRanking();
-  const players = Object.values(data.players).sort((a, b) => b.rating - a.rating);
+function showView(id, nav = 'jogar') {
+  $$('.view').forEach(v => { v.hidden = v.id !== id; });
+  $$('.nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === `#${nav}`));
+}
+
+let rankingRequest = 0;
+
+async function renderRanking() {
+  const scope = supabaseEnabled() ? $('input[name=rankScope]:checked').value : 'local';
+  $('#ranking-tabs').hidden = !supabaseEnabled();
+  $('#btn-reset-ranking').hidden = scope !== 'local';
+  const status = $('#ranking-status');
+  let data;
+  if (scope === 'global') {
+    const req = ++rankingRequest;
+    status.textContent = 'Carregando ranking global…';
+    try {
+      data = await loadGlobalRanking();
+      status.textContent = '';
+    } catch (err) {
+      console.error(err);
+      data = { players: [], matches: [] };
+      status.textContent = 'Não foi possível carregar o ranking global agora.';
+    }
+    if (req !== rankingRequest) return;
+  } else {
+    rankingRequest++;
+    const local = loadRanking();
+    data = { players: Object.values(local.players), matches: local.matches };
+    status.textContent = 'Partidas salvas só neste navegador (usado quando o ranking global não está disponível).';
+  }
+  fillRanking(data);
+}
+
+function fillRanking(data) {
+  const players = data.players.slice().sort((a, b) => b.rating - a.rating);
   $('#ranking-body').innerHTML = players.length ? players.map((p, i) => `
     <tr>
       <td class="pos">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td>
@@ -43,6 +81,8 @@ initSetup();
 initGameControls();
 initTutorial();
 initPieces();
+initOnline();
+$('#ranking-tabs').addEventListener('change', renderRanking);
 $('#btn-reset-ranking').addEventListener('click', () => {
   if (confirm('Apagar todo o ranking salvo neste navegador?')) { resetRanking(); renderRanking(); }
 });

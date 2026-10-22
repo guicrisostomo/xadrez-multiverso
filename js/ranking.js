@@ -1,6 +1,9 @@
-// Ranking Elo salvo no navegador (localStorage). Partidas com 3–4 jogadores
-// são tratadas como vários confrontos par-a-par conforme a colocação final.
+// Ranking Elo. Com o Supabase configurado o ranking é global (o Elo é calculado
+// no servidor pela função record_match); sem ele, ou se o servidor falhar, fica
+// salvo no navegador (localStorage). Partidas com 3–4 jogadores são tratadas como
+// vários confrontos par-a-par conforme a colocação final.
 import { store } from './ui.js';
+import { getSupabase, supabaseEnabled } from './supabase.js';
 
 const KEY = 'xadrez.ranking.v1';
 const START = 1200;
@@ -14,10 +17,39 @@ export function resetRanking() {
   store.set(KEY, { players: {}, matches: [] });
 }
 
+export async function loadGlobalRanking() {
+  const sb = await getSupabase();
+  const [players, matches] = await Promise.all([
+    sb.from('players').select('name, rating, games, wins, draws, losses').order('rating', { ascending: false }).limit(100),
+    sb.from('matches').select('created_at, variant, entries').order('created_at', { ascending: false }).limit(30),
+  ]);
+  if (players.error) throw players.error;
+  if (matches.error) throw matches.error;
+  return {
+    players: players.data,
+    matches: matches.data.map(m => ({ date: m.created_at, variant: m.variant, entries: m.entries })),
+  };
+}
+
 const norm = name => name.trim().toLowerCase();
 
 // entries: [{ name, bot, rank }] — rank 1 = vencedor.
-export function recordMatch(variantName, entries) {
+// Retorna { deltas, global } com a variação de Elo de cada entrada.
+export async function recordMatch(variantName, entries) {
+  if (supabaseEnabled()) {
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.rpc('record_match', { p_variant: variantName, p_entries: entries });
+      if (error) throw error;
+      return { deltas: data, global: true };
+    } catch (err) {
+      console.warn('Ranking global indisponível, salvando localmente.', err);
+    }
+  }
+  return { deltas: recordLocal(variantName, entries), global: false };
+}
+
+function recordLocal(variantName, entries) {
   const data = loadRanking();
   const rating = e => (e.bot ? BOT_RATING : data.players[norm(e.name)]?.rating ?? START);
   const before = entries.map(rating);

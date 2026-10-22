@@ -11,7 +11,8 @@
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm"
     }
   }
   </script>
@@ -35,6 +36,20 @@
         <h1>Xadrez em 2D e 3D, com peças novas e até 4 jogadores</h1>
         <p>Escolha um modo, chame os amigos para jogar no mesmo aparelho ou complete a mesa com o computador. Novo no xadrez? <a href="#tutorial">Comece pelo tutorial</a>.</p>
       </div>
+      <section id="online-box" class="online-box">
+        <div>
+          <h2>🌐 Jogar online</h2>
+          <p>Crie uma sala e mande o link para até 3 amigos, cada um no seu aparelho. Escolha o modo de jogo abaixo antes de criar a sala.</p>
+        </div>
+        <div class="online-actions">
+          <input id="online-name" class="text-input" maxlength="20" placeholder="Seu nome" aria-label="Seu nome">
+          <button class="btn" id="btn-create-room" type="button">Criar sala</button>
+          <span class="or">ou</span>
+          <input id="online-code" class="text-input code" maxlength="5" placeholder="CÓDIGO" aria-label="Código da sala">
+          <button class="btn ghost" id="btn-join-room" type="button">Entrar</button>
+        </div>
+      </section>
+      <h2 class="local-title">🏠 Partida local (mesmo aparelho)</h2>
       <form id="setup-form" class="setup">
         <fieldset>
           <legend>1. Modo de jogo</legend>
@@ -57,6 +72,36 @@
         </fieldset>
         <button class="btn big" type="submit">Começar partida ▶</button>
       </form>
+    </section>
+
+    <!-- Sala online -->
+    <section id="view-lobby" class="view" hidden>
+      <div class="lobby">
+        <p class="variant-label">Sala online</p>
+        <h1>Código: <span id="room-code" class="room-code"></span></h1>
+        <div class="link-row">
+          <input id="room-link" class="text-input" readonly aria-label="Link da sala">
+          <button class="btn small" id="btn-copy-link" type="button">Copiar link</button>
+        </div>
+        <h3>Na sala</h3>
+        <ul id="room-members" class="player-list"></ul>
+        <form id="lobby-form" class="lobby-form">
+          <label>Modo de jogo <select name="variant" class="text-input"></select></label>
+          <div id="lobby-four" class="four-options">
+            <label><input type="checkbox" name="teams"> Equipes 2×2</label>
+            <label><input type="checkbox" name="newPieces"> Peças novas</label>
+          </div>
+          <label>Lugares sem jogador
+            <select name="fill" class="text-input"><option value="bot">Computador</option><option value="empty">Vazio (só no modo 4 jogadores)</option></select>
+          </label>
+        </form>
+        <p id="lobby-wait" class="muted">Aguardando o anfitrião iniciar a partida…</p>
+        <div class="actions">
+          <button class="btn" id="btn-room-start" type="button">Iniciar partida ▶</button>
+          <button class="btn" id="btn-room-return" type="button" hidden>Voltar à partida</button>
+          <button class="btn ghost" id="btn-room-leave" type="button">Sair da sala</button>
+        </div>
+      </div>
     </section>
 
     <!-- Partida -->
@@ -113,7 +158,12 @@
     <section id="view-ranking" class="view" hidden>
       <div class="hero small">
         <h1>Ranking</h1>
-        <p>Pontuação Elo (todos começam com 1200). Partidas de 3–4 jogadores contam conforme a colocação final. Os dados ficam salvos neste navegador.</p>
+        <p>Pontuação Elo (todos começam com 1200). Partidas de 3–4 jogadores contam conforme a colocação final.</p>
+        <div class="segmented tabs" id="ranking-tabs">
+          <label><input type="radio" name="rankScope" value="global" checked><span>🌎 Global</span></label>
+          <label><input type="radio" name="rankScope" value="local"><span>💻 Neste navegador</span></label>
+        </div>
+        <p id="ranking-status" class="muted"></p>
       </div>
       <div class="table-wrap">
         <table class="ranking">
