@@ -115,11 +115,11 @@ function onMemberLeft(id) {
   const gone = room.netConfig?.seats.find(s => s.clientId === id);
   const hostGone = !room.members.some(m => m.host);
   if (hostGone && !room.isHost) {
-    toast('O anfitrião saiu da sala. A partida não pode continuar.');
+    toast('O anfitrião saiu da sala. A partida não pode continuar.', 'warn');
     return;
   }
   if (!gone) return;
-  toast(`${gone.name} desconectou…`);
+  toast(`${gone.name} desconectou…`, 'warn');
   if (!room.isHost) return;
   // Se não voltar a tempo, o computador assume o lugar.
   const r = room;
@@ -181,8 +181,8 @@ function hostStart() {
     if (userId) usedAccounts.add(userId);
     return { name, type: 'net', clientId: m.id, userId };
   });
-  if (seats.filter(s => s.type !== 'empty').length < 2) return toast('São necessários pelo menos 2 jogadores.');
-  if (options.teams && teams && seats.some(s => s.type === 'empty')) return toast('O modo equipes precisa dos 4 assentos ocupados.');
+  if (seats.filter(s => s.type !== 'empty').length < 2) return toast('São necessários pelo menos 2 jogadores.', 'warn');
+  if (options.teams && teams && seats.some(s => s.type === 'empty')) return toast('O modo equipes precisa dos 4 assentos ocupados.', 'warn');
   if (room.members.length > n) toast(`${room.members.length - n} pessoa(s) vão assistir à partida.`);
   const config = { variant, teams: !!options.teams && teams, newPieces: !!options.newPieces && newPieces, seats, gameId: crypto.randomUUID() };
   send('start', { config, moves: [] });
@@ -243,14 +243,14 @@ export function initOnline() {
 
   const nameOrWarn = () => {
     const name = $('#online-name').value.trim();
-    if (!name) { toast('Digite seu nome para jogar online.'); $('#online-name').focus(); }
+    if (!name) { toast('Digite seu nome para jogar online.', 'warn'); $('#online-name').focus(); }
     return name;
   };
   const run = async (btn, fn) => {
     btn.disabled = true;
     try { await fn(); } catch (err) {
       console.error(err);
-      toast('Não foi possível conectar à sala. Tente novamente.');
+      toast('Não foi possível conectar à sala. Tente novamente.', 'error');
     } finally { btn.disabled = false; }
   };
 
@@ -265,7 +265,7 @@ export function initOnline() {
     const name = nameOrWarn();
     const code = $('#online-code').value.trim().toUpperCase();
     if (!name) return;
-    if (!/^[A-Z0-9]{5}$/.test(code)) return toast('O código da sala tem 5 letras/números.');
+    if (!/^[A-Z0-9]{5}$/.test(code)) return toast('O código da sala tem 5 letras/números.', 'warn');
     run(e.currentTarget, () => connect(code, name, false, { variant: 'classic', fill: 'bot' }));
   });
 
@@ -280,7 +280,15 @@ export function initOnline() {
   $('#btn-room-return').addEventListener('click', () => { location.hash = '#partida'; });
   $('#btn-room-leave').addEventListener('click', () => { location.hash = '#jogar'; });
   $('#btn-copy-link').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(shareLink(room.code)); toast('Link copiado!'); } catch { $('#room-link').select(); }
+    const btn = $('#btn-copy-link');
+    try {
+      await navigator.clipboard.writeText(shareLink(room.code));
+      btn.textContent = 'Copiado ✓';
+      setTimeout(() => { btn.textContent = 'Copiar link'; }, 1800);
+    } catch {
+      $('#room-link').select();
+      toast('Selecionei o link: use Ctrl+C para copiar.', 'info');
+    }
   });
 }
 
@@ -304,7 +312,7 @@ export function joinFromLink(code) {
     closeModal();
     try { await connect(code, name, false, { variant: 'classic', fill: 'bot' }); } catch (err) {
       console.error(err);
-      toast('Não foi possível conectar à sala.');
+      toast('Não foi possível conectar à sala.', 'error');
       location.hash = '#jogar';
     }
   };

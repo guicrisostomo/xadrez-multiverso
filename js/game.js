@@ -6,7 +6,7 @@ import { Board2D, pieceHTML } from './render2d.js';
 import { recordLocal, reportMatch } from './ranking.js';
 import { currentUser, onAuthChange, openLogin } from './auth.js';
 import { supabaseEnabled } from './supabase.js';
-import { $, $$, store, escapeHTML, showModal, closeModal, toast } from './ui.js';
+import { $, $$, store, escapeHTML, showModal, closeModal, toast, confirmDialog } from './ui.js';
 
 const SETUP_KEY = 'xadrez.setup.v1';
 const ROT_OF = { '-1,0': 0, '0,1': 1, '1,0': 2, '0,-1': 3 };
@@ -141,10 +141,10 @@ export function initSetup() {
       newPieces: !!options.newPieces && form.newPieces.checked,
     };
     const active = seats.filter(s => s.type !== 'empty');
-    if (active.length < 2) return toast('São necessários pelo menos 2 jogadores.');
-    if (config.teams && active.length < 4) return toast('O modo equipes precisa dos 4 assentos ocupados.');
+    if (active.length < 2) return toast('São necessários pelo menos 2 jogadores.', 'warn');
+    if (config.teams && active.length < 4) return toast('O modo equipes precisa dos 4 assentos ocupados.', 'warn');
     const humans = active.filter(s => s.type === 'human').map(s => s.name.toLowerCase());
-    if (new Set(humans).size !== humans.length) return toast('Use nomes diferentes para cada jogador humano (o ranking usa o nome).');
+    if (new Set(humans).size !== humans.length) return toast('Use nomes diferentes para cada jogador humano (o ranking usa o nome).', 'warn');
     store.set(SETUP_KEY, { ...config, seats: seats.map(s => ({ name: s.name, type: s.account ? 'account' : s.type })) });
     startGame(config);
   });
@@ -219,7 +219,7 @@ async function setMode(mode) {
       ctx.renderer = new Board3D(host, onSquare);
     } catch (err) {
       console.error(err);
-      toast('Não foi possível carregar o modo 3D. Usando 2D.');
+      toast('Não foi possível carregar o modo 3D. Usando 2D.', 'error');
       return setMode('2d');
     }
   } else {
@@ -456,11 +456,29 @@ export function initGameControls() {
     refresh();
     maybeBot();
   });
-  $('#btn-resign').addEventListener('click', () => {
+  $('#btn-resign').addEventListener('click', async () => {
     if (!ctx || !isHumanTurn()) return;
-    if (!confirm(`${seatOf(ctx.state.turn).name}, deseja mesmo desistir?`)) return;
+    const game = ctx;
+    const ok = await confirmDialog({
+      title: `${seatOf(ctx.state.turn).name}, deseja desistir?`,
+      message: ctx.state.participants.filter(p => ctx.state.alive[p]).length > 2
+        ? 'Você será eliminado e a partida continua entre os demais.'
+        : 'A partida termina e o adversário vence.',
+      confirmText: 'Desistir', danger: true,
+    });
+    if (!ok || ctx !== game || !isHumanTurn()) return;
     commit({ resign: true }, true);
   });
-  $('#btn-new').addEventListener('click', () => { location.hash = '#jogar'; });
+  $('#btn-new').addEventListener('click', async () => {
+    if (ctx && ctx.state.status === 'playing' && ctx.moves.length) {
+      const ok = await confirmDialog({
+        title: ctx.net ? 'Sair da sala?' : 'Abandonar esta partida?',
+        message: ctx.net ? 'Você sai da sala e da partida em andamento.' : 'A partida em andamento será perdida.',
+        confirmText: ctx.net ? 'Sair' : 'Abandonar', danger: true,
+      });
+      if (!ok) return;
+    }
+    location.hash = '#jogar';
+  });
   $$('#opt-autorotate, #opt-hints').forEach(el => el.addEventListener('change', refresh));
 }

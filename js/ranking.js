@@ -18,18 +18,52 @@ export function resetRanking() {
   store.set(KEY, { players: {}, matches: [] });
 }
 
+const toMatch = m => ({ id: m.id, date: m.created_at, variant: m.variant, entries: m.entries });
+
 export async function loadGlobalRanking() {
   const sb = await getSupabase();
   const [players, matches] = await Promise.all([
-    sb.from('players').select('name, rating, games, wins, draws, losses').not('user_id', 'is', null).order('rating', { ascending: false }).limit(100),
-    sb.from('matches').select('created_at, variant, entries').not('game_id', 'is', null).order('created_at', { ascending: false }).limit(30),
+    sb.from('players').select('user_id, name, rating, games, wins, draws, losses').not('user_id', 'is', null).order('rating', { ascending: false }).limit(200),
+    sb.from('matches').select('id, created_at, variant, entries').not('game_id', 'is', null).order('created_at', { ascending: false }).limit(40),
   ]);
   if (players.error) throw players.error;
   if (matches.error) throw matches.error;
-  return {
-    players: players.data,
-    matches: matches.data.map(m => ({ date: m.created_at, variant: m.variant, entries: m.entries })),
-  };
+  return { players: players.data, matches: matches.data.map(toMatch) };
+}
+
+// Perfil público de uma conta: nome, estatísticas, posição e partidas recentes.
+export async function loadPlayerProfile(userId) {
+  const sb = await getSupabase();
+  const [profile, player] = await Promise.all([
+    sb.from('profiles').select('id, username, created_at').eq('id', userId).maybeSingle(),
+    sb.from('players').select('name, rating, games, wins, draws, losses').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (profile.error) throw profile.error;
+  if (player.error) throw player.error;
+  if (!profile.data) return null;
+
+  let position = null;
+  if (player.data) {
+    const above = await sb.from('players').select('id', { count: 'exact', head: true })
+      .not('user_id', 'is', null).gt('rating', player.data.rating);
+    if (!above.error) position = (above.count ?? 0) + 1;
+  }
+
+  // Partidas novas guardam o user_id; as mais antigas só o nome.
+  const select = 'id, created_at, variant, entries';
+  const [byId, byName] = await Promise.all([
+    sb.from('matches').select(select).contains('entries', [{ user_id: userId }]).order('created_at', { ascending: false }).limit(30),
+    sb.from('matches').select(select).not('game_id', 'is', null).contains('entries', [{ name: profile.data.username, bot: false }]).order('created_at', { ascending: false }).limit(30),
+  ]);
+  if (byId.error) throw byId.error;
+  const seen = new Set();
+  const matches = [...byId.data, ...(byName.error ? [] : byName.data)]
+    .filter(m => !seen.has(m.id) && seen.add(m.id))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 30)
+    .map(toMatch);
+
+  return { profile: profile.data, stats: player.data, position, matches };
 }
 
 const norm = name => name.trim().toLowerCase();

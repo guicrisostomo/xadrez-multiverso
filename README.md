@@ -7,7 +7,8 @@ Site de xadrez feito em HTML, CSS e JavaScript puro (sem etapa de build), com:
 - **Até 4 jogadores simultâneos** – tabuleiro em cruz 14×14, todos contra todos ou em equipes 2×2, com assentos vazios (3 jogadores) ou preenchidos pelo computador.
 - **Tutorial inicial interativo** – 15 lições (movimento de cada peça, roque, xeque-mate, peças novas e regras do modo 4 jogadores), oferecido automaticamente na primeira visita.
 - **Jogo online** – crie uma sala, mande o link e jogue com até 3 amigos, cada um no seu aparelho (Supabase Realtime). Lugares vazios podem ser preenchidos pelo computador; quem cai tem 20 s para reconectar antes de o computador assumir.
-- **Contas** – cadastro com e-mail e senha (Supabase Auth), nome de usuário público, recuperação de senha.
+- **Contas** – cadastro com e-mail e senha ou login com Google (Supabase Auth), nome de usuário público, recuperação de senha.
+- **Perfil** – página com foto, estatísticas, posição, evolução do Elo e partidas recentes; edição do nome e da senha. Cada jogador do ranking tem um perfil público.
 - **Ranking Elo global** – vale para partidas em que todos os humanos estão logados: cada conta envia o resultado e o Elo só é aplicado no servidor quando todas confirmam o mesmo resultado (ninguém consegue registrar sozinho uma vitória sobre outra conta). Partidas de 3–4 jogadores contam pela colocação final. As demais partidas ficam no ranking do navegador.
 - **Computador** – adversário simples (busca alfa-beta curta em 1×1; heurística gulosa em 3–4 jogadores).
 
@@ -40,6 +41,14 @@ Depois acesse o endereço mostrado (ex.: http://localhost:3000). O modo 3D carre
 3. Em **Authentication → URL Configuration**, defina o *Site URL* como o endereço do site (ex.: `https://xadrez-multiverso.vercel.app`) para os links de confirmação de e-mail e de nova senha voltarem para o site.
 4. As salas online usam apenas *Broadcast* e *Presence* do Realtime, que não precisam de tabelas.
 
+### Login com Google
+
+O botão "Continuar com Google" aparece sozinho quando o provedor está ativo no Supabase:
+
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials), configure a tela de consentimento OAuth e crie um **ID do cliente OAuth** do tipo *Aplicativo da Web*, com o URI de redirecionamento autorizado `https://<seu-projeto>.supabase.co/auth/v1/callback`.
+2. No Supabase, em **Authentication → Sign In / Providers → Google**, ative o provedor e cole o *Client ID* e o *Client Secret*.
+3. Em **Authentication → URL Configuration**, adicione o endereço do site em *Redirect URLs* (ex.: `https://xadrez-multiverso.vercel.app/**`).
+
 ### Hospedagem
 
 Site estático: na Vercel, importe o repositório sem framework e sem comando de build (o `vercel.json` já está configurado). Também funciona no GitHub Pages (*Deploy from a branch* → `main` / `(root)`).
@@ -67,7 +76,10 @@ js/tutorial.js      lições do tutorial e página das peças
 js/ranking.js       ranking Elo (Supabase, com reserva em localStorage)
 js/online.js        salas online (Supabase Realtime)
 js/supabase.js      cliente Supabase carregado sob demanda
-js/auth.js          contas: login, cadastro, nova senha e perfil
+js/auth.js          contas: login (e-mail ou Google), cadastro, nova senha
+js/profile.js       página de perfil (própria e pública)
+js/ranking-view.js  página do ranking e cartões de partida
+js/ui.js            janelas, confirmações e avisos (sem diálogos nativos do navegador)
 js/config.js        URL e chave pública do Supabase
 supabase/schema.sql perfis, tabelas, regras RLS e função de Elo
 test/               testes do motor (node --test)

@@ -19,23 +19,29 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#conteudo" data-scroll="conteudo">Pular para o conteúdo</a>
   <header class="topbar">
-    <a class="logo" href="#jogar"><span>♞</span> Xadrez Multiverso</a>
-    <nav class="nav">
-      <a href="#jogar">Jogar</a>
-      <a href="#tutorial">Tutorial</a>
-      <a href="#pecas">Peças</a>
-      <a href="#ranking">Ranking</a>
-      <button id="account-btn" class="account-btn" type="button" hidden>Entrar</button>
+    <a class="logo" href="#jogar" aria-label="Xadrez Multiverso, início"><span aria-hidden="true">♞</span><b>Xadrez Multiverso</b></a>
+    <nav class="nav" aria-label="Principal">
+      <a href="#jogar"><span aria-hidden="true">♟</span> Jogar</a>
+      <a href="#tutorial"><span aria-hidden="true">🎓</span> Tutorial</a>
+      <a href="#pecas"><span aria-hidden="true">♜</span> Peças</a>
+      <a href="#ranking"><span aria-hidden="true">🏆</span> Ranking</a>
     </nav>
+    <button id="account-btn" class="account-btn" type="button" hidden>Entrar</button>
   </header>
 
-  <main>
+  <main id="conteudo" tabindex="-1">
     <!-- Configuração da partida -->
     <section id="view-play" class="view">
       <div class="hero">
         <h1>Xadrez em 2D e 3D, com peças novas e até 4 jogadores</h1>
-        <p>Escolha um modo, chame os amigos para jogar no mesmo aparelho ou complete a mesa com o computador. Novo no xadrez? <a href="#tutorial">Comece pelo tutorial</a>.</p>
+        <p>Jogue online com amigos, no mesmo aparelho ou contra o computador. Novo no xadrez? <a href="#tutorial">Comece pelo tutorial</a>.</p>
+        <div class="hero-actions">
+          <button class="btn" type="button" data-scroll="online-box">🌐 Jogar online</button>
+          <button class="btn ghost" type="button" data-scroll="partida-local">🏠 Partida local</button>
+          <a class="btn ghost" href="#tutorial">🎓 Aprender</a>
+        </div>
       </div>
       <section id="online-box" class="online-box">
         <div>
@@ -50,7 +56,7 @@
           <button class="btn ghost" id="btn-join-room" type="button">Entrar</button>
         </div>
       </section>
-      <h2 class="local-title">🏠 Partida local (mesmo aparelho)</h2>
+      <h2 class="local-title" id="partida-local">🏠 Partida local (mesmo aparelho)</h2>
       <form id="setup-form" class="setup">
         <fieldset>
           <legend>1. Modo de jogo</legend>
@@ -167,24 +173,42 @@
 
     <!-- Ranking -->
     <section id="view-ranking" class="view" hidden>
-      <div class="hero small">
-        <h1>Ranking</h1>
-        <p>Pontuação Elo (todos começam com 1200). Partidas de 3–4 jogadores contam conforme a colocação final.</p>
-        <div class="segmented tabs" id="ranking-tabs">
+      <div class="page-head">
+        <div>
+          <h1>Ranking</h1>
+          <p class="muted">Pontuação Elo (todos começam com 1200). Partidas de 3–4 jogadores contam pela colocação final.</p>
+        </div>
+        <div class="segmented" id="ranking-tabs" role="radiogroup" aria-label="Qual ranking">
           <label><input type="radio" name="rankScope" value="global" checked><span>🌎 Global</span></label>
           <label><input type="radio" name="rankScope" value="local"><span>💻 Neste navegador</span></label>
         </div>
-        <p id="ranking-status" class="muted"></p>
+      </div>
+      <p id="ranking-status" class="status-line muted"></p>
+      <div id="my-rank" class="my-rank card" hidden></div>
+      <div id="podium" class="podium"></div>
+      <div class="table-tools">
+        <input id="ranking-search" class="text-input search" type="search" placeholder="Buscar jogador…" aria-label="Buscar jogador">
       </div>
       <div class="table-wrap">
         <table class="ranking">
-          <thead><tr><th>#</th><th>Jogador</th><th class="num">Elo</th><th class="num">Partidas</th><th class="num">Vitórias</th><th class="num">Empates</th><th class="num">Derrotas</th></tr></thead>
+          <thead><tr><th>#</th><th>Jogador</th><th class="num">Elo</th><th class="num hide-sm">Partidas</th><th class="num hide-sm" title="Vitórias / Empates / Derrotas">V/E/D</th><th class="num">Vitórias</th></tr></thead>
           <tbody id="ranking-body"></tbody>
         </table>
       </div>
-      <h2 class="section-title">Partidas recentes</h2>
+      <div class="section-row">
+        <h2 class="section-title">Partidas recentes</h2>
+        <div class="segmented small" id="match-filter" role="radiogroup" aria-label="Filtrar partidas" hidden>
+          <label><input type="radio" name="matchFilter" value="all" checked><span>Todas</span></label>
+          <label><input type="radio" name="matchFilter" value="mine"><span>Minhas</span></label>
+        </div>
+      </div>
       <ul id="match-list" class="match-list"></ul>
-      <button class="btn ghost small" id="btn-reset-ranking">Apagar ranking</button>
+      <button class="btn ghost small" id="btn-reset-ranking">Apagar ranking deste navegador</button>
+    </section>
+
+    <!-- Perfil -->
+    <section id="view-profile" class="view" hidden>
+      <div id="profile-root" class="profile"></div>
     </section>
   </main>
 
