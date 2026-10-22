@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Xadrez Multiverso</title>
+  <meta name="description" content="Xadrez em 2D e 3D com peças novas, tutorial interativo, partidas de até 4 jogadores e ranking.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="#jogar"><span>♞</span> Xadrez Multiverso</a>
+    <nav class="nav">
+      <a href="#jogar">Jogar</a>
+      <a href="#tutorial">Tutorial</a>
+      <a href="#pecas">Peças</a>
+      <a href="#ranking">Ranking</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Configuração da partida -->
+    <section id="view-play" class="view">
+      <div class="hero">
+        <h1>Xadrez em 2D e 3D, com peças novas e até 4 jogadores</h1>
+        <p>Escolha um modo, chame os amigos para jogar no mesmo aparelho ou complete a mesa com o computador. Novo no xadrez? <a href="#tutorial">Comece pelo tutorial</a>.</p>
+      </div>
+      <form id="setup-form" class="setup">
+        <fieldset>
+          <legend>1. Modo de jogo</legend>
+          <div id="variant-list" class="variant-list"></div>
+          <div id="four-options" class="four-options" hidden>
+            <label><input type="checkbox" name="teams"> Equipes 2×2 (Vermelho + Amarelo contra Azul + Verde)</label>
+            <label><input type="checkbox" name="newPieces"> Usar peças novas (Arcebispo e Chanceler no lugar dos bispos)</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>2. Jogadores</legend>
+          <div id="seat-list" class="seat-list"></div>
+        </fieldset>
+        <fieldset>
+          <legend>3. Visual</legend>
+          <div class="segmented">
+            <label><input type="radio" name="mode" value="2d" checked><span>2D</span></label>
+            <label><input type="radio" name="mode" value="3d"><span>3D</span></label>
+          </div>
+        </fieldset>
+        <button class="btn big" type="submit">Começar partida ▶</button>
+      </form>
+    </section>
+
+    <!-- Partida -->
+    <section id="view-game" class="view" hidden>
+      <div class="game-layout">
+        <div class="board-area"><div id="board-host"></div></div>
+        <aside class="side">
+          <div class="variant-label" id="variant-label"></div>
+          <div class="turn-banner" id="turn-banner"></div>
+          <ul id="player-list" class="player-list"></ul>
+          <div class="controls">
+            <button class="btn small" id="btn-mode">Ver em 3D</button>
+            <button class="btn small ghost" id="btn-rotate" title="Girar tabuleiro">⟳ Girar</button>
+            <button class="btn small ghost" id="btn-undo">↶ Desfazer</button>
+            <button class="btn small ghost" id="btn-resign">🏳 Desistir</button>
+            <button class="btn small ghost" id="btn-new">Novo jogo</button>
+          </div>
+          <label class="opt"><input type="checkbox" id="opt-autorotate" checked> Virar o tabuleiro para quem joga</label>
+          <label class="opt"><input type="checkbox" id="opt-hints" checked> Mostrar lances possíveis</label>
+          <h3>Lances</h3>
+          <ol id="move-log" class="move-log"></ol>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Tutorial -->
+    <section id="view-tutorial" class="view" hidden>
+      <div class="tutorial-layout">
+        <nav class="lessons"><h2>Tutorial</h2><ol id="lesson-list"></ol></nav>
+        <div class="tut-board-wrap"><div id="tutorial-board"></div></div>
+        <article class="lesson">
+          <h2 id="lesson-title"></h2>
+          <div id="lesson-text"></div>
+          <div id="lesson-feedback" class="feedback"></div>
+          <div class="actions">
+            <button class="btn ghost small" id="tut-prev">← Anterior</button>
+            <button class="btn ghost small" id="tut-reset">Recomeçar</button>
+            <button class="btn small" id="tut-next">Próxima →</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Peças -->
+    <section id="view-pieces" class="view" hidden>
+      <div class="hero small">
+        <h1>As peças</h1>
+        <p>As casas destacadas mostram para onde cada peça pode ir. As peças marcadas como <span class="new-tag">nova</span> são exclusivas das variantes.</p>
+      </div>
+      <div id="pieces-grid" class="pieces-grid"></div>
+    </section>
+
+    <!-- Ranking -->
+    <section id="view-ranking" class="view" hidden>
+      <div class="hero small">
+        <h1>Ranking</h1>
+        <p>Pontuação Elo (todos começam com 1200). Partidas de 3–4 jogadores contam conforme a colocação final. Os dados ficam salvos neste navegador.</p>
+      </div>
+      <div class="table-wrap">
+        <table class="ranking">
+          <thead><tr><th>#</th><th>Jogador</th><th class="num">Elo</th><th class="num">Partidas</th><th class="num">Vitórias</th><th class="num">Empates</th><th class="num">Derrotas</th></tr></thead>
+          <tbody id="ranking-body"></tbody>
+        </table>
+      </div>
+      <h2 class="section-title">Partidas recentes</h2>
+      <ul id="match-list" class="match-list"></ul>
+      <button class="btn ghost small" id="btn-reset-ranking">Apagar ranking</button>
+    </section>
+  </main>
+
+  <div id="modal" class="modal" hidden></div>
+</body>
+</html>

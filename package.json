@@ -1,0 +1,12 @@
+{
+  "name": "xadrez-multiverso",
+  "version": "1.0.0",
+  "description": "Xadrez em 2D e 3D com peças novas, tutorial, até 4 jogadores e ranking.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes serve .",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "MIT"
+}
