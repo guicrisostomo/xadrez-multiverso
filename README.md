@@ -7,7 +7,8 @@ Site de xadrez feito em HTML, CSS e JavaScript puro (sem etapa de build), com:
 - **Até 4 jogadores simultâneos** – tabuleiro em cruz 14×14, todos contra todos ou em equipes 2×2, com assentos vazios (3 jogadores) ou preenchidos pelo computador.
 - **Tutorial inicial interativo** – 15 lições (movimento de cada peça, roque, xeque-mate, peças novas e regras do modo 4 jogadores), oferecido automaticamente na primeira visita.
 - **Jogo online** – crie uma sala, mande o link e jogue com até 3 amigos, cada um no seu aparelho (Supabase Realtime). Lugares vazios podem ser preenchidos pelo computador; quem cai tem 20 s para reconectar antes de o computador assumir.
-- **Ranking Elo global** – partidas com jogadores humanos atualizam a pontuação no Supabase (partidas de 3–4 jogadores contam pela colocação final), com histórico das últimas partidas. Sem conexão, o ranking fica salvo no navegador.
+- **Contas** – cadastro com e-mail e senha (Supabase Auth), nome de usuário público, recuperação de senha.
+- **Ranking Elo global** – vale para partidas em que todos os humanos estão logados: cada conta envia o resultado e o Elo só é aplicado no servidor quando todas confirmam o mesmo resultado (ninguém consegue registrar sozinho uma vitória sobre outra conta). Partidas de 3–4 jogadores contam pela colocação final. As demais partidas ficam no ranking do navegador.
 - **Computador** – adversário simples (busca alfa-beta curta em 1×1; heurística gulosa em 3–4 jogadores).
 
 ## Modos de jogo
@@ -17,7 +18,8 @@ Site de xadrez feito em HTML, CSS e JavaScript puro (sem etapa de build), com:
 | Clássico | 8×8 | 2 | tradicionais |
 | Novas Peças | 10×8 | 2 | + Arcebispo e Chanceler |
 | Caos | 8×8 | 2 | Amazona, Arcebispo, Chanceler, Camelos e Torres |
-| 4 Jogadores | 14×14 em cruz | 2–4 (opção equipes) | tradicionais ou com peças novas |
+| 4 Jogadores | 14×14 em cruz | 2, 3 ou 4 (opção equipes) | tradicionais ou com Arcebispo e Chanceler |
+| Multiverso | 14×14 em cruz | 2, 3 ou 4 (opção equipes) | só peças novas: Amazona, Arcebispo, Chanceler e Camelo |
 
 Regras do modo 4 jogadores: ordem Vermelho → Azul → Amarelo → Verde; quem leva xeque-mate ou fica sem lances é eliminado; um rei deixado em xeque pode ser capturado por outro jogador antes da vez do dono; peões promovem na linha central.
 
@@ -34,8 +36,9 @@ Depois acesse o endereço mostrado (ex.: http://localhost:3000). O modo 3D carre
 ### Supabase (ranking global e salas online)
 
 1. O endereço do projeto e a chave *publishable* ficam em `js/config.js` (a chave é pública por definição; quem protege os dados são as regras RLS).
-2. No **SQL Editor** do Supabase, execute `supabase/schema.sql`. Ele cria as tabelas `players` e `matches` (somente leitura para o público) e a função `record_match`, que valida a partida e calcula o Elo no servidor.
-3. As salas online usam apenas *Broadcast* e *Presence* do Realtime, que não precisam de tabelas.
+2. No **SQL Editor** do Supabase, execute `supabase/schema.sql` (pode ser executado de novo a cada atualização). Ele cria `profiles` (nome de usuário de cada conta), `players` e `matches` (somente leitura para o público), `match_reports` (confirmações pendentes, privada) e a função `report_match`, que exige login, confere as confirmações e calcula o Elo no servidor.
+3. Em **Authentication → URL Configuration**, defina o *Site URL* como o endereço do site (ex.: `https://xadrez-multiverso.vercel.app`) para os links de confirmação de e-mail e de nova senha voltarem para o site.
+4. As salas online usam apenas *Broadcast* e *Presence* do Realtime, que não precisam de tabelas.
 
 ### Hospedagem
 
@@ -64,14 +67,17 @@ js/tutorial.js      lições do tutorial e página das peças
 js/ranking.js       ranking Elo (Supabase, com reserva em localStorage)
 js/online.js        salas online (Supabase Realtime)
 js/supabase.js      cliente Supabase carregado sob demanda
+js/auth.js          contas: login, cadastro, nova senha e perfil
 js/config.js        URL e chave pública do Supabase
-supabase/schema.sql tabelas, regras RLS e função de Elo
+supabase/schema.sql perfis, tabelas, regras RLS e função de Elo
 test/               testes do motor (node --test)
 ```
 
 ## Limitações e próximos passos
 
-- Não há login: o ranking identifica jogadores pelo nome, então qualquer pessoa pode jogar com o nome de outra. Um próximo passo seria usar o Supabase Auth.
+- O servidor confia no resultado que todas as contas confirmam; ele não refaz os lances. Duas contas da mesma pessoa podem combinar resultados entre si.
+- No mesmo aparelho só há uma conta logada, então partidas locais só valem para o ranking global quando os outros lugares são do computador.
+- Quem sai de uma partida online e é substituído pelo computador fica de fora do ranking daquela partida.
 - No jogo online o anfitrião é a referência da partida (computadores e registro no ranking); se ele sair, a partida para.
 
 ## Licença

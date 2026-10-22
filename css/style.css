@@ -274,6 +274,25 @@ input[type=checkbox] { accent-color: var(--accent); width: 18px; height: 18px; }
 .tabs { margin-top: 16px; }
 #link-name { width: 100%; }
 
+/* ------------------------------------------------ contas */
+.account-btn {
+  margin-left: 6px; padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700;
+  background: var(--accent); color: #1b1408; border: 0; max-width: 200px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.account-btn.logged { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.auth-form { display: grid; gap: 12px; }
+.auth-form label { display: grid; gap: 4px; font-size: .92rem; }
+.auth-form small { font-size: .8rem; }
+.auth-links { margin: 0; text-align: center; font-size: .9rem; color: var(--muted); }
+.form-status { margin: 0; min-height: 1.2em; font-size: .9rem; }
+.form-status.bad { color: var(--bad); }
+.form-status.ok { color: var(--ok); }
+.rated-hint { margin: 12px 0 0; font-size: .9rem; color: var(--muted); }
+.seat-count { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); }
+.seat-count .segmented span { padding: 7px 18px; }
+.seat input[readonly] { color: var(--accent); font-weight: 700; }
+
 /* ------------------------------------------------ modal / toast */
 .modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(8, 6, 12, .7); backdrop-filter: blur(4px); }
 .modal-card { width: min(100%, 460px); background: var(--bg-2); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); animation: pop .18s ease-out; }

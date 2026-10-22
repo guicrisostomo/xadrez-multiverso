@@ -1,7 +1,8 @@
-// Ranking Elo. Com o Supabase configurado o ranking é global (o Elo é calculado
-// no servidor pela função record_match); sem ele, ou se o servidor falhar, fica
-// salvo no navegador (localStorage). Partidas com 3–4 jogadores são tratadas como
-// vários confrontos par-a-par conforme a colocação final.
+// Ranking Elo. O ranking global (Supabase) vale para partidas em que todos os
+// humanos estão logados: cada conta envia o resultado por report_match e o Elo é
+// calculado no servidor quando todas confirmam. As demais partidas ficam no
+// ranking deste navegador (localStorage). Partidas com 3–4 jogadores são tratadas
+// como vários confrontos par-a-par conforme a colocação final.
 import { store } from './ui.js';
 import { getSupabase, supabaseEnabled } from './supabase.js';
 
@@ -20,8 +21,8 @@ export function resetRanking() {
 export async function loadGlobalRanking() {
   const sb = await getSupabase();
   const [players, matches] = await Promise.all([
-    sb.from('players').select('name, rating, games, wins, draws, losses').order('rating', { ascending: false }).limit(100),
-    sb.from('matches').select('created_at, variant, entries').order('created_at', { ascending: false }).limit(30),
+    sb.from('players').select('name, rating, games, wins, draws, losses').not('user_id', 'is', null).order('rating', { ascending: false }).limit(100),
+    sb.from('matches').select('created_at, variant, entries').not('game_id', 'is', null).order('created_at', { ascending: false }).limit(30),
   ]);
   if (players.error) throw players.error;
   if (matches.error) throw matches.error;
@@ -33,23 +34,20 @@ export async function loadGlobalRanking() {
 
 const norm = name => name.trim().toLowerCase();
 
-// entries: [{ name, bot, rank }] — rank 1 = vencedor.
-// Retorna { deltas, global } com a variação de Elo de cada entrada.
-export async function recordMatch(variantName, entries) {
-  if (supabaseEnabled()) {
-    try {
-      const sb = await getSupabase();
-      const { data, error } = await sb.rpc('record_match', { p_variant: variantName, p_entries: entries });
-      if (error) throw error;
-      return { deltas: data, global: true };
-    } catch (err) {
-      console.warn('Ranking global indisponível, salvando localmente.', err);
-    }
-  }
-  return { deltas: recordLocal(variantName, entries), global: false };
+// Envia o resultado de uma partida com contas para o ranking global.
+// entries: [{ user_id, bot, rank }] na ordem dos jogadores (rank 1 = vencedor).
+// Retorna { status: 'pending' | 'applied' | 'already', deltas?, confirmed?, needed? }.
+export async function reportMatch(gameId, variantName, entries) {
+  if (!supabaseEnabled()) throw new Error('Supabase não configurado');
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('report_match', { p_game_id: gameId, p_variant: variantName, p_entries: entries });
+  if (error) throw error;
+  return data;
 }
 
-function recordLocal(variantName, entries) {
+// Ranking deste navegador. entries: [{ name, bot, rank }] — rank 1 = vencedor.
+// Retorna a variação de Elo de cada entrada.
+export function recordLocal(variantName, entries) {
   const data = loadRanking();
   const rating = e => (e.bot ? BOT_RATING : data.players[norm(e.name)]?.rating ?? START);
   const before = entries.map(rating);
