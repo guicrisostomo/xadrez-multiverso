@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createState, legalMoves, makeMove, resign, isInCheck } from '../js/engine.js';
-import { VARIANTS } from '../js/variants.js';
+import { VARIANTS, CROSS_SEATS } from '../js/variants.js';
 
 const sq = (s, name) => ({ r: s.h - Number(name.slice(1)), c: name.charCodeAt(0) - 97 });
 function play(s, ...moves) {
@@ -77,4 +77,19 @@ test('3 jogadores (assento vazio)', () => {
   t = makeMove(t, legalMoves(t)[0]);
   assert.equal(t.turn, 3);
   assert.equal(isInCheck(t, 3), false);
+});
+
+test('Multiverso com 2, 3 e 4 jogadores', () => {
+  const setup = VARIANTS.multiverso.build({});
+  assert.ok(setup.pieces.some(p => p.t === 'M') && setup.pieces.some(p => p.t === 'Z'));
+  for (const n of [2, 3, 4]) {
+    const active = [0, 1, 2, 3].map(i => CROSS_SEATS[n].includes(i));
+    let s = createState(setup, active);
+    assert.ok(legalMoves(s).length > 0);
+    for (let i = 0; i < n - 1; i++) s = resign(s);
+    assert.equal(s.status, 'over', `${n} jogadores`);
+  }
+  const two = createState(setup, [true, false, true, false]);
+  const after = makeMove(two, legalMoves(two)[0]);
+  assert.equal(after.turn, 2, 'com 2 jogadores, o Amarelo joga depois do Vermelho');
 });

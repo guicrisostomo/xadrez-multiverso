@@ -46,10 +46,11 @@ const LESSONS = [
       <li>Se um rei ficar em xeque e outro jogador puder capturá-lo antes da vez do dono, o rei é capturado!</li>
       <li>Os peões são promovidos ao chegar na <strong>linha central</strong> (8ª fileira de cada jogador).</li>
       <li>No modo <strong>equipes</strong>, Vermelho + Amarelo jogam contra Azul + Verde.</li>
-      <li>Você também pode jogar com 3 pessoas deixando um assento <em>vazio</em>, ou completar a mesa com o computador.</li></ul>` },
+      <li>Dá para jogar com <strong>2, 3 ou 4</strong> pessoas (opção "Jogadores na mesa"); com 2, elas ficam frente a frente. Também dá para completar a mesa com o computador.</li>
+      <li>O modo <strong>Multiverso</strong> usa este mesmo tabuleiro só com as peças novas: Amazona, Arcebispo, Chanceler e Camelo.</li></ul>` },
   { title: 'Pronto para jogar!', kind: 'info', variant: 'capablanca',
     text: `<p>Parabéns, você concluiu o tutorial! 🎉</p>
-      <p>Cada partida terminada com jogadores humanos conta pontos no <strong>ranking</strong> (sistema Elo, começando em 1200).</p>
+      <p>Crie uma <strong>conta</strong> (botão "Entrar" no topo) para suas partidas valerem no <strong>ranking global</strong> (sistema Elo, começando em 1200).</p>
       <p><a class="btn" href="#jogar">Começar uma partida</a></p>` },
 ];
 

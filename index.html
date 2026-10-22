@@ -26,6 +26,7 @@
       <a href="#tutorial">Tutorial</a>
       <a href="#pecas">Peças</a>
       <a href="#ranking">Ranking</a>
+      <button id="account-btn" class="account-btn" type="button" hidden>Entrar</button>
     </nav>
   </header>
 
@@ -55,13 +56,22 @@
           <legend>1. Modo de jogo</legend>
           <div id="variant-list" class="variant-list"></div>
           <div id="four-options" class="four-options" hidden>
-            <label><input type="checkbox" name="teams"> Equipes 2×2 (Vermelho + Amarelo contra Azul + Verde)</label>
-            <label><input type="checkbox" name="newPieces"> Usar peças novas (Arcebispo e Chanceler no lugar dos bispos)</label>
+            <label id="opt-teams"><input type="checkbox" name="teams"> Equipes 2×2 (Vermelho + Amarelo contra Azul + Verde)</label>
+            <label id="opt-new-pieces"><input type="checkbox" name="newPieces"> Usar peças novas (Arcebispo e Chanceler no lugar dos bispos)</label>
           </div>
         </fieldset>
         <fieldset>
           <legend>2. Jogadores</legend>
+          <div id="seat-count-row" class="seat-count" hidden>
+            <span>Jogadores na mesa</span>
+            <div class="segmented">
+              <label><input type="radio" name="seatCount" value="2"><span>2</span></label>
+              <label><input type="radio" name="seatCount" value="3"><span>3</span></label>
+              <label><input type="radio" name="seatCount" value="4"><span>4</span></label>
+            </div>
+          </div>
           <div id="seat-list" class="seat-list"></div>
+          <p id="rated-hint" class="rated-hint" hidden></p>
         </fieldset>
         <fieldset>
           <legend>3. Visual</legend>
@@ -88,12 +98,13 @@
         <form id="lobby-form" class="lobby-form">
           <label>Modo de jogo <select name="variant" class="text-input"></select></label>
           <div id="lobby-four" class="four-options">
-            <label><input type="checkbox" name="teams"> Equipes 2×2</label>
-            <label><input type="checkbox" name="newPieces"> Peças novas</label>
+            <label id="lobby-opt-teams"><input type="checkbox" name="teams"> Equipes 2×2</label>
+            <label id="lobby-opt-new-pieces"><input type="checkbox" name="newPieces"> Peças novas</label>
           </div>
           <label>Lugares sem jogador
-            <select name="fill" class="text-input"><option value="bot">Computador</option><option value="empty">Vazio (só no modo 4 jogadores)</option></select>
+            <select name="fill" class="text-input"><option value="bot">Computador</option><option value="empty">Vazio (tabuleiro em cruz: 2 ou 3 jogadores)</option></select>
           </label>
+          <p id="lobby-rated" class="rated-hint"></p>
         </form>
         <p id="lobby-wait" class="muted">Aguardando o anfitrião iniciar a partida…</p>
         <div class="actions">

@@ -27,7 +27,15 @@ function twoPlayer(id, w, h, backRank, promoTypes) {
   };
 }
 
-function fourPlayer({ teams = false, newPieces = false } = {}) {
+// set: 'classic' (peças tradicionais), 'new' (Arcebispo e Chanceler no lugar dos
+// bispos) ou 'all' (só peças novas: Amazona, Arcebispo, Chanceler e Camelo).
+const CROSS_SETS = {
+  classic: { a: 'RNBQKBNR', b: 'RNBKQBNR', promo: ['Q', 'R', 'B', 'N'] },
+  new: { a: 'RNAQKCNR', b: 'RNCKQANR', promo: ['Q', 'C', 'A', 'R', 'N'] },
+  all: { a: 'RNAZKCMR', b: 'RMCKZANR', promo: ['Z', 'C', 'A', 'R', 'N', 'M'] },
+};
+
+function fourPlayer({ id = 'four', teams = false, set = 'classic' } = {}) {
   const N = 14;
   const holes = [];
   for (let r = 0; r < N; r++) {
@@ -35,8 +43,7 @@ function fourPlayer({ teams = false, newPieces = false } = {}) {
       if ((r < 3 || r > 10) && (c < 3 || c > 10)) holes.push(r * N + c);
     }
   }
-  const a = newPieces ? 'RNAQKCNR' : 'RNBQKBNR';
-  const b = newPieces ? 'RNCKQANR' : 'RNBKQBNR';
+  const { a, b, promo } = CROSS_SETS[set];
   const pieces = [];
   for (let i = 0; i < 8; i++) {
     pieces.push({ t: a[i], o: 0, r: 13, c: 3 + i }, { t: 'P', o: 0, r: 12, c: 3 + i });
@@ -45,8 +52,8 @@ function fourPlayer({ teams = false, newPieces = false } = {}) {
     pieces.push({ t: b[i], o: 3, r: 10 - i, c: 13 }, { t: 'P', o: 3, r: 10 - i, c: 12 });
   }
   return {
-    id: 'four', w: N, h: N, holes, pieces, teams,
-    promoTypes: newPieces ? ['Q', 'C', 'A', 'R', 'N'] : ['Q', 'R', 'B', 'N'],
+    id, w: N, h: N, holes, pieces, teams,
+    promoTypes: promo,
     players: [
       { ...FOUR_COLORS[0], forward: [-1, 0], promo: { axis: 'r', value: 6 } },
       { ...FOUR_COLORS[1], forward: [0, 1], promo: { axis: 'c', value: 7 } },
@@ -80,10 +87,22 @@ export const VARIANTS = {
   },
   four: {
     name: '4 Jogadores',
-    tag: 'até 4 jogadores · 14×14',
-    desc: 'Tabuleiro em cruz para 3 ou 4 pessoas, todos contra todos ou em equipes 2×2.',
+    tag: '2 a 4 jogadores · 14×14',
+    desc: 'Tabuleiro em cruz para 2, 3 ou 4 pessoas, todos contra todos ou em equipes 2×2.',
     seats: 4,
-    options: true,
-    build: (opts) => fourPlayer(opts),
+    options: { teams: true, newPieces: true },
+    build: ({ teams, newPieces } = {}) => fourPlayer({ teams, set: newPieces ? 'new' : 'classic' }),
+  },
+  multiverso: {
+    name: 'Multiverso',
+    tag: '2 a 4 jogadores · 14×14',
+    desc: 'O tabuleiro em cruz só com peças novas: Amazona, Arcebispo, Chanceler e Camelo.',
+    seats: 4,
+    options: { teams: true },
+    build: ({ teams } = {}) => fourPlayer({ id: 'multiverso', teams, set: 'all' }),
   },
 };
+
+// Assentos ocupados no tabuleiro em cruz conforme o número de jogadores:
+// com 2, ficam frente a frente (Vermelho × Amarelo).
+export const CROSS_SEATS = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };

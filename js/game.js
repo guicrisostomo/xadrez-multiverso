@@ -1,9 +1,11 @@
 // Tela de configuração e controle da partida (jogadores locais e computador).
 import { createState, legalMoves, makeMove, resign, isInCheck, findKing, sameMove, PIECE_TYPES } from './engine.js';
-import { VARIANTS } from './variants.js';
+import { VARIANTS, CROSS_SEATS } from './variants.js';
 import { chooseMove } from './ai.js';
 import { Board2D, pieceHTML } from './render2d.js';
-import { recordMatch } from './ranking.js';
+import { recordLocal, reportMatch } from './ranking.js';
+import { currentUser, onAuthChange, openLogin } from './auth.js';
+import { supabaseEnabled } from './supabase.js';
 import { $, $$, store, escapeHTML, showModal, closeModal, toast } from './ui.js';
 
 const SETUP_KEY = 'xadrez.setup.v1';
@@ -29,46 +31,121 @@ export function initSetup() {
   form.newPieces.checked = !!saved.newPieces;
   form.mode.value = saved.mode || '2d';
 
-  const renderSeats = () => {
-    const id = form.variant.value;
-    const v = VARIANTS[id];
+  // Lê os assentos como estão no formulário (para preservar o que o usuário digitou).
+  const readSeats = () => $$('#seat-list .seat').map((_, i) => ({
+    name: form[`seatName${i}`].value, type: form[`seatType${i}`].value,
+  }));
+
+  const renderSeats = (current = null) => {
+    const v = VARIANTS[form.variant.value];
     const setup = v.build({});
+    const user = currentUser();
     $('#four-options').hidden = !v.options;
-    const prev = store.get(SETUP_KEY, {}).seats || [];
+    $('#opt-teams').hidden = !v.options?.teams;
+    $('#opt-new-pieces').hidden = !v.options?.newPieces;
+    $('#seat-count-row').hidden = v.seats <= 2;
+    const prev = current || store.get(SETUP_KEY, {}).seats || [];
+    let accountUsed = false;
     $('#seat-list').innerHTML = setup.players.map((p, i) => {
       const s = prev[i] || {};
-      const type = s.type || (i === 0 || v.seats === 2 ? 'human' : 'bot');
+      let type = s.type || (i === 0 || v.seats === 2 ? 'human' : 'bot');
+      if (type === 'empty' && v.seats <= 2) type = 'human';
+      if (type === 'account' && (!user || accountUsed)) type = 'human';
+      if (user && i === 0 && !current && !prev.some(x => x?.type === 'account')) type = 'account';
+      if (type === 'account') accountUsed = true;
+      const name = type === 'account' ? user.username : (s.type === 'account' ? '' : s.name) || `Jogador ${i + 1}`;
       return `
       <div class="seat">
         <span class="dot" style="--pc:${p.color};--st:${p.stroke}"></span>
         <span class="seat-color">${p.name}</span>
-        <input name="seatName${i}" maxlength="20" value="${escapeHTML(s.name || `Jogador ${i + 1}`)}" aria-label="Nome do jogador ${i + 1}">
+        <input name="seatName${i}" maxlength="20" value="${escapeHTML(name)}" aria-label="Nome do jogador ${i + 1}" ${type === 'account' ? 'readonly' : ''}>
         <select name="seatType${i}" aria-label="Tipo do jogador ${i + 1}">
+          ${user ? `<option value="account" ${type === 'account' ? 'selected' : ''}>Você (conta)</option>` : ''}
           <option value="human" ${type === 'human' ? 'selected' : ''}>Humano</option>
           <option value="bot" ${type === 'bot' ? 'selected' : ''}>Computador</option>
           ${v.seats > 2 ? `<option value="empty" ${type === 'empty' ? 'selected' : ''}>Vazio</option>` : ''}
         </select>
       </div>`;
     }).join('');
+    syncSeatCount();
+    renderRatedHint();
   };
-  form.addEventListener('change', e => { if (e.target.name === 'variant') renderSeats(); });
+
+  // Seletor "Jogadores na mesa" do tabuleiro em cruz: ocupa os assentos certos
+  // (com 2 jogadores eles ficam frente a frente).
+  const syncSeatCount = () => {
+    const active = readSeats().filter(s => s.type !== 'empty').length;
+    form.seatCount.value = CROSS_SEATS[active] ? String(active) : '';
+  };
+  const applySeatCount = n => {
+    const seats = readSeats();
+    const want = CROSS_SEATS[n];
+    seats.forEach((s, i) => {
+      if (!want.includes(i)) s.type = 'empty';
+      else if (s.type === 'empty') s.type = 'bot';
+    });
+    if (n < 4) form.teams.checked = false;
+    renderSeats(seats);
+  };
+
+  const renderRatedHint = () => {
+    const hint = $('#rated-hint');
+    if (!supabaseEnabled()) { hint.hidden = true; return; }
+    hint.hidden = false;
+    const seats = readSeats().filter(s => s.type !== 'empty');
+    const humans = seats.filter(s => s.type !== 'bot');
+    if (!currentUser()) {
+      hint.innerHTML = '🔒 <a href="#" data-login>Entre na sua conta</a> para esta partida valer no ranking global.';
+      hint.querySelector('[data-login]').addEventListener('click', e => { e.preventDefault(); openLogin(); });
+    } else if (seats.some(s => s.type === 'account') && humans.length === 1) {
+      hint.textContent = '🏆 Esta partida vale para o ranking global.';
+    } else {
+      hint.textContent = 'ℹ️ No mesmo aparelho, só valem para o ranking global partidas entre você (conta) e o computador. Para jogar com amigos valendo ranking, use uma sala online.';
+    }
+  };
+
+  form.addEventListener('change', e => {
+    if (e.target.name === 'variant') renderSeats();
+    else if (e.target.name === 'seatCount' && e.target.value) applySeatCount(+e.target.value);
+    else if (e.target.name?.startsWith('seatType')) {
+      const seats = readSeats();
+      const i = +e.target.name.slice(8);
+      if (e.target.value === 'account') seats.forEach((s, j) => { if (j !== i && s.type === 'account') s.type = 'human'; });
+      if (seats[i].type !== 'account' && form[`seatName${i}`].readOnly) seats[i].name = `Jogador ${i + 1}`;
+      renderSeats(seats);
+    } else if (e.target.name === 'teams' && e.target.checked) applySeatCount(4);
+  });
+  onAuthChange(user => {
+    const seats = readSeats();
+    // Ao entrar na conta, o primeiro assento humano passa a ser o da conta.
+    const first = seats.findIndex(x => x.type === 'human');
+    if (user && first >= 0 && !seats.some(x => x.type === 'account')) seats[first].type = 'account';
+    renderSeats(seats);
+  });
   renderSeats();
 
   form.addEventListener('submit', e => {
     e.preventDefault();
     const variant = form.variant.value;
     const n = VARIANTS[variant].build({}).players.length;
-    const seats = Array.from({ length: n }, (_, i) => ({
-      name: form[`seatName${i}`].value.trim() || `Jogador ${i + 1}`,
-      type: form[`seatType${i}`].value,
-    }));
-    const config = { variant, seats, teams: form.teams.checked, newPieces: form.newPieces.checked, mode: form.mode.value };
+    const user = currentUser();
+    const options = VARIANTS[variant].options || {};
+    const seats = Array.from({ length: n }, (_, i) => {
+      const type = form[`seatType${i}`].value;
+      if (type === 'account' && user) return { name: user.username, type: 'human', account: true, userId: user.id };
+      return { name: form[`seatName${i}`].value.trim() || `Jogador ${i + 1}`, type: type === 'account' ? 'human' : type };
+    });
+    const config = {
+      variant, seats, mode: form.mode.value,
+      teams: !!options.teams && form.teams.checked,
+      newPieces: !!options.newPieces && form.newPieces.checked,
+    };
     const active = seats.filter(s => s.type !== 'empty');
     if (active.length < 2) return toast('São necessários pelo menos 2 jogadores.');
-    if (config.teams && variant === 'four' && active.length < 4) return toast('O modo equipes precisa dos 4 assentos ocupados.');
+    if (config.teams && active.length < 4) return toast('O modo equipes precisa dos 4 assentos ocupados.');
     const humans = active.filter(s => s.type === 'human').map(s => s.name.toLowerCase());
     if (new Set(humans).size !== humans.length) return toast('Use nomes diferentes para cada jogador humano (o ranking usa o nome).');
-    store.set(SETUP_KEY, config);
+    store.set(SETUP_KEY, { ...config, seats: seats.map(s => ({ name: s.name, type: s.account ? 'account' : s.type })) });
     startGame(config);
   });
 }
@@ -80,13 +157,15 @@ export function initSetup() {
 // Tipos de assento: human (joga neste aparelho), remote (outro aparelho), bot, empty.
 export function startGame(config, net = null, moves = []) {
   stopGame();
+  // Cada partida local tem seu próprio id (usado ao registrar no ranking).
+  if (!net) config = { ...config, gameId: crypto.randomUUID() };
   const v = VARIANTS[config.variant];
   const setup = v.build({ teams: config.teams, newPieces: config.newPieces });
   const active = config.seats.map(s => s.type !== 'empty');
   const state = createState(setup, active);
   ctx = {
     config, net, state, history: [], moves: [], selected: null, rot: 0, recorded: false, renderer: null,
-    variantName: v.name + (config.variant === 'four' && config.teams ? ' (equipes)' : ''),
+    variantName: v.name + (config.teams ? ' (equipes)' : ''),
   };
   for (const ser of moves) applySer(ser);
   ctx.recorded = ctx.state.status === 'over';
@@ -303,13 +382,31 @@ async function gameOver() {
   let note = '';
   if (!ctx.recorded) {
     ctx.recorded = true;
-    const entries = s.participants.map(p => ({ name: seatOf(p).name, bot: seatOf(p).type === 'bot', rank: s.result.rank[p] }));
-    if (!runsBots()) {
-      note = 'O anfitrião da sala registra o resultado no ranking.';
-    } else if (entries.some(e => !e.bot)) {
-      const res = await recordMatch(ctx.variantName, entries);
-      deltas = res.deltas;
-      note = res.global ? 'Resultado registrado no ranking global.' : 'Resultado salvo no ranking deste navegador.';
+    const seats = s.participants.map(seatOf);
+    const ranks = s.participants.map(p => s.result.rank[p]);
+    const humans = seats.filter(seat => seat.type !== 'bot');
+    const me = currentUser();
+    // Vale para o ranking global quando todos os humanos têm conta e eu sou um deles.
+    const rated = humans.length > 0 && humans.every(seat => seat.userId) && me && humans.some(seat => seat.userId === me.id);
+    if (rated) {
+      try {
+        const res = await reportMatch(ctx.config.gameId, ctx.variantName, seats.map((seat, i) => ({
+          user_id: seat.type === 'bot' ? null : seat.userId, bot: seat.type === 'bot', rank: ranks[i],
+        })));
+        if (res.status === 'pending') {
+          note = `Resultado enviado ao ranking global. Ele vale quando todos confirmarem (${res.confirmed}/${res.needed}).`;
+        } else {
+          deltas = res.deltas;
+          note = 'Resultado registrado no ranking global.';
+        }
+      } catch (err) {
+        console.error(err);
+        note = `Não foi possível registrar no ranking global: ${err.message}`;
+      }
+    } else if (runsBots() && humans.length) {
+      deltas = recordLocal(ctx.variantName, seats.map((seat, i) => ({ name: seat.name, bot: seat.type === 'bot', rank: ranks[i] })));
+      note = 'Resultado salvo no ranking deste navegador'
+        + (supabaseEnabled() ? ' (para valer no ranking global, todos os jogadores precisam estar logados).' : '.');
     }
     if (ctx !== game) return;
   }

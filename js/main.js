@@ -4,6 +4,7 @@ import { initTutorial, initPieces, maybeOfferTutorial } from './tutorial.js';
 import { loadRanking, loadGlobalRanking, resetRanking } from './ranking.js';
 import { initOnline, inRoom, joinFromLink, leaveEverything, lobbyChanged } from './online.js';
 import { supabaseEnabled } from './supabase.js';
+import { initAuth } from './auth.js';
 import { $, $$, escapeHTML, closeModal } from './ui.js';
 
 const ROUTES = { jogar: 'view-play', partida: 'view-game', sala: 'view-lobby', tutorial: 'view-tutorial', pecas: 'view-pieces', ranking: 'view-ranking' };
@@ -77,6 +78,7 @@ function fillRanking(data) {
     || '<li class="empty">Sem partidas recentes.</li>';
 }
 
+initAuth();
 initSetup();
 initGameControls();
 initTutorial();

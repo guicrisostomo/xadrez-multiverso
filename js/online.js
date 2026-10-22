@@ -3,7 +3,8 @@
 // ele inicia as partidas, joga pelos computadores, reenvia o histórico a quem
 // reconecta e registra o resultado no ranking.
 import { getSupabase, supabaseEnabled } from './supabase.js';
-import { VARIANTS } from './variants.js';
+import { VARIANTS, CROSS_SEATS } from './variants.js';
+import { currentUser, onAuthChange } from './auth.js';
 import { startGame, receiveMove, currentGame, setSeatType, stopGame } from './game.js';
 import { $, store, escapeHTML, toast, showModal, closeModal } from './ui.js';
 
@@ -31,8 +32,11 @@ export const inRoom = () => !!room;
 
 // ---------------------------------------------------------------- conexão
 
+const presenceInfo = r => ({ name: r.name, joinedAt: r.joinedAt, host: r.isHost, userId: currentUser()?.id ?? null });
+
 async function connect(code, name, isHost, lobby) {
   leaveRoom();
+  if (currentUser()) name = currentUser().username;
   const sb = await getSupabase();
   const channel = sb.channel(`xadrez-sala-${code}`, {
     config: { presence: { key: myId }, broadcast: { self: false } },
@@ -63,7 +67,7 @@ async function connect(code, name, isHost, lobby) {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { clearTimeout(timer); reject(new Error(status)); }
     });
   });
-  await channel.track({ name, joinedAt: r.joinedAt, host: isHost });
+  await channel.track(presenceInfo(r));
   store.set(NAME_KEY, name);
   location.hash = '#sala';
   renderLobby();
@@ -158,21 +162,29 @@ function sendSnapshot(to) {
 
 function hostStart() {
   const { variant, teams, newPieces, fill } = room.lobby;
+  const options = VARIANTS[variant].options || {};
   const n = VARIANTS[variant].build({}).players.length;
   const players = room.members.slice(0, n);
-  const used = new Set();
+  const leaveEmpty = fill === 'empty' && n === 4;
+  // No tabuleiro em cruz com lugares vazios, 2 jogadores ficam frente a frente.
+  const order = leaveEmpty && CROSS_SEATS[players.length] ? CROSS_SEATS[players.length] : players.map((_, i) => i);
+  const usedNames = new Set();
+  const usedAccounts = new Set();
   const seats = Array.from({ length: n }, (_, i) => {
-    const m = players[i];
-    if (!m) return fill === 'empty' && n > 2 ? { name: 'Vazio', type: 'empty' } : { name: `Computador ${i + 1}`, type: 'bot' };
+    const m = players[order.indexOf(i)];
+    if (!m) return leaveEmpty ? { name: 'Vazio', type: 'empty' } : { name: `Computador ${i + 1}`, type: 'bot' };
     let name = m.name;
-    for (let k = 2; used.has(name.toLowerCase()); k++) name = `${m.name.slice(0, 17)} ${k}`;
-    used.add(name.toLowerCase());
-    return { name, type: 'net', clientId: m.id };
+    for (let k = 2; usedNames.has(name.toLowerCase()); k++) name = `${m.name.slice(0, 17)} ${k}`;
+    usedNames.add(name.toLowerCase());
+    // A mesma conta em duas abas só vale uma vez.
+    const userId = m.userId && !usedAccounts.has(m.userId) ? m.userId : null;
+    if (userId) usedAccounts.add(userId);
+    return { name, type: 'net', clientId: m.id, userId };
   });
   if (seats.filter(s => s.type !== 'empty').length < 2) return toast('São necessários pelo menos 2 jogadores.');
-  if (variant === 'four' && teams && seats.some(s => s.type === 'empty')) return toast('O modo equipes precisa dos 4 assentos ocupados.');
+  if (options.teams && teams && seats.some(s => s.type === 'empty')) return toast('O modo equipes precisa dos 4 assentos ocupados.');
   if (room.members.length > n) toast(`${room.members.length - n} pessoa(s) vão assistir à partida.`);
-  const config = { variant, teams: variant === 'four' && teams, newPieces: variant === 'four' && newPieces, seats, gameId: crypto.randomUUID() };
+  const config = { variant, teams: !!options.teams && teams, newPieces: !!options.newPieces && newPieces, seats, gameId: crypto.randomUUID() };
   send('start', { config, moves: [] });
   onStart({ config, moves: [] });
 }
@@ -183,17 +195,24 @@ function renderLobby() {
   if (!room) return;
   $('#room-code').textContent = room.code;
   $('#room-link').value = shareLink(room.code);
-  const n = VARIANTS[room.lobby.variant].build({}).players.length;
+  const v = VARIANTS[room.lobby.variant];
+  const n = v.build({}).players.length;
   $('#room-members').innerHTML = room.members.map((m, i) => `
-    <li><span class="seat-n">${i < n ? `${i + 1}º` : '👀'}</span> ${escapeHTML(m.name)}
+    <li><span class="seat-n">${i < n ? `${i + 1}º` : '👀'}</span> ${escapeHTML(m.name)}${m.userId ? ' <span title="Conta verificada">✔</span>' : ''}
       ${m.host ? '<span class="st team">anfitrião</span>' : ''}${m.id === myId ? '<span class="st team">você</span>' : ''}</li>`).join('');
+  const playing = room.members.slice(0, n);
+  $('#lobby-rated').textContent = playing.every(m => m.userId)
+    ? '🏆 Todos estão logados: a partida vale para o ranking global.'
+    : '🔒 Para valer no ranking global, todos os jogadores precisam entrar na conta (botão no topo).';
   const form = $('#lobby-form');
   form.variant.value = room.lobby.variant;
   form.teams.checked = !!room.lobby.teams;
   form.newPieces.checked = !!room.lobby.newPieces;
   form.fill.value = room.lobby.fill || 'bot';
   for (const el of form.elements) el.disabled = !room.isHost;
-  $('#lobby-four').hidden = room.lobby.variant !== 'four';
+  $('#lobby-four').hidden = !v.options;
+  $('#lobby-opt-teams').hidden = !v.options?.teams;
+  $('#lobby-opt-new-pieces').hidden = !v.options?.newPieces;
   $('#btn-room-start').hidden = !room.isHost;
   $('#lobby-wait').hidden = room.isHost;
   const game = currentGame();
@@ -206,7 +225,20 @@ export function initOnline() {
     $('#online-box').hidden = true;
     return;
   }
-  $('#online-name').value = store.get(NAME_KEY, '');
+  const syncName = user => {
+    const input = $('#online-name');
+    input.readOnly = !!user;
+    input.value = user ? user.username : store.get(NAME_KEY, '');
+  };
+  syncName(currentUser());
+  onAuthChange(user => {
+    syncName(user);
+    // Atualiza a presença na sala para refletir login/logout.
+    if (room) {
+      if (user) room.name = user.username;
+      room.channel.track(presenceInfo(room));
+    }
+  });
   $('#lobby-form').variant.innerHTML = Object.entries(VARIANTS).map(([id, v]) => `<option value="${id}">${v.name} (${v.tag})</option>`).join('');
 
   const nameOrWarn = () => {
