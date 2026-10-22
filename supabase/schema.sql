@@ -31,6 +31,7 @@ create policy "edita o proprio perfil" on public.profiles for update to authenti
   using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
 
 -- Cria o perfil ao cadastrar, usando o nome escolhido (com sufixo se já existir).
+-- No login com Google não há nome de usuário: usa o nome da conta Google ou o e-mail.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -38,7 +39,12 @@ security definer
 set search_path = public
 as $$
 declare
-  base text := left(btrim(coalesce(new.raw_user_meta_data ->> 'username', '')), 15);
+  base text := left(btrim(regexp_replace(coalesce(
+    nullif(new.raw_user_meta_data ->> 'username', ''),
+    nullif(new.raw_user_meta_data ->> 'full_name', ''),
+    nullif(new.raw_user_meta_data ->> 'name', ''),
+    split_part(coalesce(new.email, ''), '@', 1)
+  ), '[^[:alnum:]_ .-]', '', 'g')), 15);
   candidate text;
 begin
   if char_length(base) < 3 then base := 'jogador'; end if;
@@ -96,6 +102,8 @@ create table if not exists public.match_reports (
 
 create index if not exists players_rating_idx on public.players (rating desc);
 create index if not exists matches_created_idx on public.matches (created_at desc);
+-- Busca das partidas de um jogador (entries @> '[{"user_id": ...}]').
+create index if not exists matches_entries_idx on public.matches using gin (entries jsonb_path_ops);
 
 grant select on public.players, public.matches to anon, authenticated;
 revoke all on public.match_reports from anon, authenticated;
@@ -270,7 +278,7 @@ begin
         losses = pl.losses + excluded.losses,
         updated_at = now();
     end if;
-    stored := stored || jsonb_build_object('name', uname, 'bot', bots[i], 'rank', ranks[i], 'delta', deltas[i]);
+    stored := stored || jsonb_build_object('user_id', uids[i], 'name', uname, 'bot', bots[i], 'rank', ranks[i], 'delta', deltas[i]);
   end loop;
 
   insert into matches (game_id, variant, entries) values (p_game_id, p_variant, stored) returning id into match_id;
